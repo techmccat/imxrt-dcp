@@ -1,0 +1,26 @@
+[package]
+name = "imxrt-dcp"
+description = "Driver for the i.MX RT Data Co-Processor (dcp)"
+repository = "github.com/techmccat/imxrt-dcp"
+readme = "README.md"
+keywords = ["imxrt", "dcp", "nxp", "embedded", "no_std"]
+categories = ["embedded", "no_std", "cryptography", "hardware-support"]
+version = "0.1.0"
+edition = "2018"
+
+[features]
+imxrt1011 = ["imxrt-ral/imxrt1011"]
+imxrt1015 = ["imxrt-ral/imxrt1015"]
+imxrt1021 = ["imxrt-ral/imxrt1021"]
+imxrt1051 = ["imxrt-ral/imxrt1051"]
+imxrt1052 = ["imxrt-ral/imxrt1052"]
+imxrt1061 = ["imxrt-ral/imxrt1061"]
+imxrt1062 = ["imxrt-ral/imxrt1062"]
+imxrt1064 = ["imxrt-ral/imxrt1064"]
+
+[dependencies]
+cortex-m = "0.7"
+cortex-m-rt = "0.6"
+bitvec = { version = "0.20", default-features = false }
+nb = "1.0"
+imxrt-ral = "0.4"
