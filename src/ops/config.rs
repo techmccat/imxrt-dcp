@@ -8,8 +8,8 @@ pub enum CopySource<'a> {
     ConstantFill(u32),
 }
 
-impl Into<Source> for CopySource<'_> {
-    fn into(self) -> Source {
+impl<'a> Into<Source<'a>> for CopySource<'a> {
+    fn into(self) -> Source<'a> {
         match self {
             Self::MemoryBuffer(slice) => Source::from(slice),
             Self::ConstantFill(constant) => Source { constant },
@@ -35,17 +35,17 @@ impl Framebuffer<'_> {
 ///
 /// Crypt operations can be run in-place, without the need to allocate a separate source and
 /// destination buffer.
-pub enum CryptMem<'a, 'b> {
+pub enum CryptMem<'a> {
     InPlace(&'a mut [u8]),
-    SourceDest(&'a [u8], &'b mut [u8])
+    SourceDest(&'a [u8], &'a mut [u8])
 }
 
-impl Into<(Source, *mut ())> for CryptMem<'_, '_> {
-    fn into(self) -> (Source, *mut ()) {
+impl<'s> Into<(Source<'s>, *mut u8)> for CryptMem<'s> {
+    fn into(self) -> (Source<'s>, *mut u8) {
         match self {
-            Self::SourceDest(s, d) => (Source::from(s), d as *mut [u8] as *mut ()),
+            Self::SourceDest(s, d) => (Source::from(s), d.as_mut_ptr()),
             Self::InPlace(sd) => {
-                let d = sd as *mut [u8] as *mut ();
+                let d = sd.as_mut_ptr();
                 let s = Source { pointer: d as *const () };
                 (s, d)
             }

@@ -9,6 +9,7 @@ version = "0.1.0"
 edition = "2018"
 
 [features]
+# default = ["imxrt1061"] # used in developement to not anger rust-analyzer
 imxrt1011 = ["imxrt-ral/imxrt1011"]
 imxrt1015 = ["imxrt-ral/imxrt1015"]
 imxrt1021 = ["imxrt-ral/imxrt1021"]

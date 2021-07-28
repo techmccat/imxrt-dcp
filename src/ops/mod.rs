@@ -1,3 +1,5 @@
+//! DCP operation types
+//!
 //! This module contains the operations available to the DCP and traits to make writing this
 //! library less of a pain. (TODO: actual documentation)
 

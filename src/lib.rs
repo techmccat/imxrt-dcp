@@ -9,7 +9,8 @@ use ral::{modify_reg, write_reg, dcp};
 pub mod channels;
 pub mod ops;
 pub mod packet;
-//pub mod task;
+pub mod task;
+pub mod ex;
 
 /// Derived from the DCP status field when an operation fails.
 /// Holds the error kind and an 8 bit error code.
@@ -41,12 +42,12 @@ pub fn setup<C: channels::Channel>(ccm_regs: &mut ral::ccm::RegisterBlock) -> ra
     write_reg!(dcp,
         dcp_regs,
         CTRL_CLR,
-        ral::dcp::CTRL_SET::SFTRST::mask );
+        ral::dcp::CTRL_SET::SFTRST::mask);
     // Then set it low to enable operation
     write_reg!(dcp,
         dcp_regs,
         CTRL_SET,
-        ral::dcp::CTRL_SET::SFTRST::mask );
+        ral::dcp::CTRL_SET::SFTRST::mask);
     // Enable residual writes for faster unaligned operations
     let ctrl_reg = ral::dcp::CTRL::GATHER_RESIDUAL_WRITES::mask
     // Context caching

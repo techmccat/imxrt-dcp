@@ -9,6 +9,8 @@
 //! Usage of this module is not recommended as minor mistakes might lead to incorrect or undefined
 //! behavior.
 
+use core::{marker::{PhantomData, PhantomPinned}, mem::{transmute_copy, zeroed}};
+
 use bitvec::prelude::*;
 use crate::Error;
 
@@ -18,11 +20,25 @@ pub struct ControlPacket<'a> {
     pub next: Option<&'a mut ControlPacket<'a>>,
     pub control0: Control0,
     pub control1: Control1,
-    pub source: Source,
-    pub dest: *mut (),
+    pub source: Source<'a>,
+    pub dest: *mut u8,
     pub bufsize: BufSize,
-    pub payload: *mut (),
+    pub payload: *mut u8,
     pub status: Status,
+    pub(crate) _up: PhantomPinned
+}
+
+impl Default for ControlPacket<'_> {
+    fn default() -> Self {
+        // It's probably going to be fine
+        unsafe { zeroed::<ControlPacket>() }
+    }
+}
+
+impl Clone for ControlPacket<'_> {
+    fn clone(&self) -> Self {
+        unsafe { transmute_copy::<Self, Self>(&self) }
+    }
 }
 
 /// The Control0 field of the control packet.   
@@ -137,14 +153,21 @@ impl Control1 {
 /// It can be a 32 bit value for constant fill or a pointer.
 #[repr(C)]
 #[derive(Clone, Copy)]
-pub union Source {
+pub union Source<'a> {
     pub constant: u32,
-    pub pointer: *const ()
+    pub pointer: *const (),
+    _lifetime: PhantomData<&'a ()>
 }
 
-impl From<&[u8]> for Source {
-    fn from(slice: &[u8]) -> Self {
+impl<'a> From<&'a [u8]> for Source<'a> {
+    fn from(slice: &'a [u8]) -> Self {
         Self { pointer: slice as *const [u8] as *const () }
+    }
+}
+
+impl Default for Source<'_> {
+    fn default() -> Self {
+        Source { constant: 0 }
     }
 }
 

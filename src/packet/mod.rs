@@ -1,7 +1,8 @@
 pub mod raw;
 
 use core::marker::PhantomData;
-use core::ptr::null_mut;
+
+use crate::task::BlankTask;
 
 use super::ops::{*, config::*};
 use raw::*;
@@ -10,28 +11,15 @@ use raw::*;
 ///
 /// The options will be different based on the operation.
 pub struct PacketBuilder<'a, T> {
-    pub raw: ControlPacket<'a>,
-    phantom: PhantomData<T>,
+    pub raw: ControlPacket<'a>, phantom: PhantomData<T>,
 }
 
 impl PacketBuilder<'_, Memcopy> {
-    pub fn new(src: CopySource, dst: &mut [u8]) -> Self {
-        let mut control0 = Control0::memcopy();
-        let control1 = Control1::default();
-
-        if let CopySource::ConstantFill(_) = src {
-            control0.constant_fill();
-        }
-
+    pub fn new() -> Self {
         let raw = ControlPacket {
-            next: None,
-            control0,
-            control1,
-            source: src.into(),
-            dest: dst as *mut [u8] as *mut (),
-            bufsize: BufSize { bufsize: dst.len() },
-            payload: null_mut(),
-            status: Status::default(),
+            control0: Control0::memcopy(),
+            control1: Control1::default(),
+            ..Default::default()
         };
 
         Self {
@@ -42,23 +30,11 @@ impl PacketBuilder<'_, Memcopy> {
 }
 
 impl PacketBuilder<'_, Blit> {
-    pub fn new(src: CopySource, fb: Framebuffer) -> Self {
-        let mut control0 = Control0::blit();
-        let control1 = Control1::blit(fb.width);
-
-        if let CopySource::ConstantFill(_) = src {
-            control0.constant_fill();
-        }
-
+    pub fn new() -> Self {
         let raw = ControlPacket {
-            next: None,
-            control0,
-            control1,
-            source: src.into(),
-            dest: fb.pointer.as_mut() as *mut [u8] as *mut (),
-            bufsize: BufSize { blit: BlitSize { width: fb.width, height: fb.height() } },
-            payload: null_mut(),
-            status: Status::default(),
+            control0: Control0::blit(),
+            control1: Control1::default(),
+            ..Default::default()
         };
 
         Self {
@@ -68,30 +44,12 @@ impl PacketBuilder<'_, Blit> {
     }
 }
 
-// TODO: Alignment optimizations, might want to look into https://crates.io/crates/aligned
 impl<C: CipherSelect> PacketBuilder<'_, Cipher<C>> {
-    pub fn new(mem: CryptMem, payl: &mut [u8]) -> Self {
-        assert!(payl.len() >= C::PAYLOAD_BYTES);
-
-        let len = match &mem {
-            CryptMem::SourceDest(s, d) => {
-            // There might be a better way than panicking, like returning a result
-            assert_eq!(s.len(), d.len());
-            s.len() }
-            CryptMem::InPlace(sd) => sd.len()
-        };
-
-        let (source, dest) = mem.into();
-
+    pub fn new() -> Self {
         let raw = ControlPacket {
-            next: None,
             control0: Control0::cipher(),
             control1: C::ctl1(),
-            source,
-            dest,
-            bufsize: BufSize { bufsize: len },
-            payload: payl as *mut [u8] as *mut (),
-            status: Status::default(),
+            ..Default::default()
         };
 
         Self {
@@ -102,18 +60,11 @@ impl<C: CipherSelect> PacketBuilder<'_, Cipher<C>> {
 }
 
 impl<H: HashSelect> PacketBuilder<'_, Hash<H>> {
-    pub fn new(src: &[u8], payl: &mut [u8]) -> Self {
-        assert!(payl.len() >= H::PAYLOAD_BYTES);
-
+    pub fn new() -> Self {
         let raw = ControlPacket {
-            next: None,
             control0: Control0::hash(),
             control1: H::ctl1(),
-            source: src.into(),
-            dest: null_mut(),
-            payload: payl as *mut [u8] as *mut (),
-            bufsize: BufSize { bufsize: src.len() },
-            status: Status::default(),
+            ..Default::default()
         };
 
         Self {
@@ -124,19 +75,11 @@ impl<H: HashSelect> PacketBuilder<'_, Hash<H>> {
 }
 
 impl<H: HashSelect> PacketBuilder<'_, MemcopyHash<H>> {
-    pub fn new(src: &[u8], payl: &mut [u8]) -> Self {
-        // TODO: Decent way to create payload
-        assert!(payl.len() >= H::PAYLOAD_BYTES);
-
+    pub fn new() -> Self {
         let raw = ControlPacket {
-            next: None,
             control0: Control0::memcopy_hash(),
             control1: H::ctl1(),
-            source: src.into(),
-            dest: null_mut(),
-            payload: payl as *mut [u8] as *mut (),
-            bufsize: BufSize { bufsize: src.len() },
-            status: Status::default(),
+            ..Default::default()
         };
 
         Self {
@@ -147,34 +90,17 @@ impl<H: HashSelect> PacketBuilder<'_, MemcopyHash<H>> {
 }
 
 impl<C: CipherSelect, H: HashSelect> PacketBuilder<'_, CipherHash<C, H>> {
-    pub fn new(mem: CryptMem, payl: &mut [u8]) -> Self {
-        // TODO: Decent way to create payload
-        assert!(payl.len() >= C::PAYLOAD_BYTES + H::PAYLOAD_BYTES);
-
+    pub fn new() -> Self {
         let mut control1 = Control1::default();
         control1.cipher_select(C::CIPHER_SELECT);
         control1.cipher_mode(C::CIPHER_MODE);
         control1.hash_select(H::HASH_SELECT);
 
-        let len = match &mem {
-            CryptMem::SourceDest(s, d) => {
-            // There might be a better way than panicking, like returning a result
-            assert_eq!(s.len(), d.len());
-            s.len() }
-            CryptMem::InPlace(sd) => sd.len()
-        };
-
-        let (source, dest) = mem.into();
-
         let raw = ControlPacket {
             next: None,
             control0: Control0::cipher_hash(),
             control1,
-            source,
-            dest,
-            payload: payl as *mut [u8] as *mut (),
-            bufsize: BufSize { bufsize: len },
-            status: Status::default(),
+            ..Default::default()
         };
 
         Self {
@@ -222,10 +148,17 @@ impl<T: HasHash> PacketBuilder<'_, T> {
     ctl0_wrapper!(hash_output);
 }
 
-impl<T> PacketBuilder <'_, T> {
+impl<'a, T> PacketBuilder <'a, T> {
     ctl0_wrapper!(input_big_endian => input_wordswap, input_byteswap);
     ctl0_wrapper!(output_big_endian => output_wordswap, output_byteswap);
     ctl0_wrapper!(key_big_endian => key_wordswap, key_byteswap);
     ctl0_wrapper!(chain_continuous);
     ctl0_wrapper!(decr_semaphore);
+
+    pub fn new_task(&self) -> BlankTask<'a, T> {
+        BlankTask {
+            raw: self.raw.clone(),
+            _op: self.phantom
+        }
+    }
 }

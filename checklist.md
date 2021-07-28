@@ -7,7 +7,7 @@
 - [ ] Channel singletons
 - [x] Raw control packet API
 - [x] Packet builder API
-- [ ] Pollable operation handles
+- [x] Pollable operation handles
 - [ ] Execute packets
 - [ ] Execute multiple packets
 - [ ] Making sure it works
@@ -29,6 +29,7 @@
 - [ ] Useful documentation (possibly serious, so not written by me)
 
 ## Improvements
-- [ ] Reusable builders
-- [ ] Set buffer addresses in the operation and not the builder (yaay, more type-specific impls)
-- [ ] HAL feature to use CCM handle instead of registers
+- [x] Reusable builders
+- [x] Set buffer addresses in the operation and not the builder (yaay, more type-specific impls)
+- [ ] HAL feature to take CCM handle instead of registers
+- [ ] Require setting buffer positions before freezing task
