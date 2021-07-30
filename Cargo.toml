@@ -1,7 +1,7 @@
 [package]
 name = "imxrt-dcp"
 description = "Driver for the i.MX RT Data Co-Processor (dcp)"
-repository = "github.com/techmccat/imxrt-dcp"
+repository = "https://github.com/techmccat/imxrt-dcp"
 readme = "README.md"
 keywords = ["imxrt", "dcp", "nxp", "embedded", "no_std"]
 categories = ["embedded", "no_std", "cryptography", "hardware-support"]

@@ -9,7 +9,7 @@
 //! Usage of this module is not recommended as minor mistakes might lead to incorrect or undefined
 //! behavior.
 
-use core::{marker::{PhantomData, PhantomPinned}, mem::{transmute_copy, zeroed}};
+use core::{marker::PhantomData, mem::{transmute_copy, zeroed}};
 
 use bitvec::prelude::*;
 use crate::Error;
@@ -25,7 +25,6 @@ pub struct ControlPacket<'a> {
     pub bufsize: BufSize,
     pub payload: *mut u8,
     pub status: Status,
-    pub(crate) _up: PhantomPinned
 }
 
 impl Default for ControlPacket<'_> {

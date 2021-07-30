@@ -1,4 +1,4 @@
-use core::{marker::PhantomData, pin::Pin};
+use core::{convert::Infallible, marker::{PhantomData, PhantomPinned}, ops::{Deref, DerefMut}, pin::Pin};
 
 use crate::{ex::Executor, packet::raw::{ControlPacket, BufSize, BlitSize, Control1}, ops::{*, config::*}};
 
@@ -19,7 +19,8 @@ impl<'a, O> BlankTask<'a, O> {
 
     pub fn freeze(self) -> Task<'a> {
         Task {
-            inner: self.raw
+            inner: self.raw,
+            _unpin: PhantomPinned
         }
     }
 }
@@ -119,16 +120,31 @@ impl<'a, C: CipherSelect, H: HashSelect> BlankTask<'a, CipherHash<C, H>> {
 /// Polling it without calling start first will always return [WouldBlock](nb::Error::WouldBlock)
 pub struct Task<'a> {
     inner: ControlPacket<'a>,
+    _unpin: PhantomPinned
 }
 
 impl Task<'_> {
     /// Tells the executor to start/schedule the task for execution
-    pub fn start<E: Executor>(self: Pin<&mut Self>, ex: &mut E) {
-        ex.exec(self)
+    pub fn start<E: Executor>(self: Pin<&mut Self>, ex: &mut E) -> nb::Result<(), Infallible> {
+        ex.exec_one(self)
     }
 
     /// Checks if work on the packet has terminated
     pub fn poll(self: Pin<&Self>) -> crate::Result {
         self.inner.status.poll()
+    }
+}
+
+impl<'a> Deref for Task<'a> {
+    type Target = ControlPacket<'a>;
+
+    fn deref(&self) -> &Self::Target {
+        &self.inner
+    }
+}
+
+impl<'a> DerefMut for Task<'a> {
+    fn deref_mut(&mut self) -> &mut Self::Target {
+        &mut self.inner
     }
 }

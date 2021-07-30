@@ -1,4 +1,8 @@
-use super::ral::{self, dcp::{RegisterBlock, CHANNELCTRL::ENABLE_CHANNEL::RW as ch}, write_reg};
+use super::ral::{
+    self,
+    dcp::{RegisterBlock, CHANNELCTRL::ENABLE_CHANNEL::RW as ch},
+    read_reg, write_reg,
+};
 use crate::packet::raw::ControlPacket;
 
 /// Trait implemented for DCP concurrent channels.
@@ -11,11 +15,25 @@ pub trait Channel {
     fn incr_semaphore(inst: &RegisterBlock, value: u32);
     /// Clears the status register of the channel. Called at the end of an operation.
     fn clear_status(inst: &RegisterBlock);
+    /// Checks if the channel is in use.
+    fn busy(inst: &RegisterBlock) -> bool;
 
-    /// Enables the channel. Enabling more than one channel requires setting up a context switch
-    /// buffer for the DCP.
+    /// Enables the channel and clears its status.
     fn enable(inst: &RegisterBlock) {
         write_reg!(ral::dcp, inst, CHANNELCTRL_SET, Self::CHANNEL_BIT);
+        Self::clear_status(inst);
+    }
+
+    /// Disables the channel and clears its status.
+    fn disable(inst: &RegisterBlock) {
+        Self::clear_status(inst);
+        write_reg!(ral::dcp, inst, CHANNELCTRL_CLR, Self::CHANNEL_BIT);
+    }
+
+    /// Clears the status and writes a control packet pointer.
+    fn clear_and_cmdptr(inst: &RegisterBlock, ptr: &ControlPacket) {
+        Self::clear_status(inst);
+        Self::write_cmdptr(inst, ptr);
     }
 }
 
@@ -49,11 +67,20 @@ macro_rules! clear_status {
     };
 }
 
+macro_rules! busy {
+    ( $reg:ident ) => {
+        fn busy(inst: &RegisterBlock) -> bool {
+            read_reg!(ral::dcp, inst, $reg, VALUE != 0)
+        }
+    };
+}
+
 impl Channel for Ch0 {
     const CHANNEL_BIT: u32 = ch::CH0;
     write_cmdptr!(CH0CMDPTR);
     incr_semaphore!(CH0SEMA);
     clear_status!(CH0STAT_CLR);
+    busy!(CH0SEMA);
 }
 
 impl Channel for Ch1 {
@@ -61,6 +88,7 @@ impl Channel for Ch1 {
     write_cmdptr!(CH1CMDPTR);
     incr_semaphore!(CH1SEMA);
     clear_status!(CH1STAT_CLR);
+    busy!(CH1SEMA);
 }
 
 impl Channel for Ch2 {
@@ -68,6 +96,7 @@ impl Channel for Ch2 {
     const CHANNEL_BIT: u32 = ch::CH2;
     incr_semaphore!(CH2SEMA);
     clear_status!(CH2STAT_CLR);
+    busy!(CH2SEMA);
 }
 
 impl Channel for Ch3 {
@@ -75,4 +104,5 @@ impl Channel for Ch3 {
     write_cmdptr!(CH3CMDPTR);
     incr_semaphore!(CH3SEMA);
     clear_status!(CH3STAT_CLR);
+    busy!(CH3SEMA);
 }

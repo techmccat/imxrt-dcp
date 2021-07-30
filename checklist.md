@@ -3,13 +3,16 @@
 ## Core functionality
 - [x] DCP initialization
 - [ ] Check for capabilities on init
-- [ ] Using multiple channels
-- [ ] Channel singletons
+- [x] Using multiple channels
+- [ ] Channel/Scheduler singletons
 - [x] Raw control packet API
 - [x] Packet builder API
 - [x] Pollable operation handles
-- [ ] Execute packets
+- [x] Execute packets
 - [ ] Execute multiple packets
+    - [x] Contiguous slice of packets
+    - [ ] Using the `next` field of the packet
+    - [ ] API for building packet chains
 - [ ] Making sure it works
 
 ## Optimizations
@@ -19,7 +22,8 @@
 
 ## Features
 - [ ] Traits for cypto/digest operations
-- [ ] Multi-channel scheduler
+- [x] Multi-channel scheduler
+- [ ] High-priority and reserved channels
 - [ ] Manage AES keys (OTP, write-only memory)
 
 ## Library
@@ -31,5 +35,4 @@
 ## Improvements
 - [x] Reusable builders
 - [x] Set buffer addresses in the operation and not the builder (yaay, more type-specific impls)
-- [ ] HAL feature to take CCM handle instead of registers
 - [ ] Require setting buffer positions before freezing task
