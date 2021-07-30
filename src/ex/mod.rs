@@ -1,7 +1,7 @@
-use core::{convert::Infallible, marker::PhantomData, pin::Pin};
+use core::{marker::PhantomData, pin::Pin};
 use imxrt_ral::{dcp, write_reg};
 
-use crate::{channels::*, task::Task};
+use crate::{channels::*, dcp::Builder, task::Task};
 
 /// Error returned when the `[Executor]` does not have space left to enqueue the task
 pub struct SlotsFull;
@@ -45,24 +45,30 @@ pub struct SingleChannel<C: Channel> {
 }
 
 impl<C: Channel> SingleChannel<C> {
-    /// Takes the `[Instance](dcp::Instance)` singleton and returns self.
-    pub fn new(inst: dcp::Instance) -> Self {
+    /// Builds `Self` from a `[Builder]`
+    pub fn new(builder: Builder) -> Self {
+        builder.setup();
+        let inst = builder.inst;
+
         C::clear_status(&inst);
         C::enable(&inst);
 
         Self {
             inst,
-            _chan: PhantomData,
+            _chan: PhantomData
         }
     }
 
-    /// Blocks until tasks are complete and returns the DCP instance.
-    pub fn release(self) -> dcp::Instance {
+    /// Blocks until tasks are complete and returns a `[Builder]`.
+    pub fn release(self) -> Builder {
         // block until the channel is free
         while C::busy(&self.inst) {}
 
         C::disable(&self.inst);
-        self.inst
+
+        Builder {
+            inst: self.inst
+        }
     }
 }
 
@@ -87,7 +93,10 @@ pub struct Scheduler<'a> {
 }
 
 impl<'a> Scheduler<'a> {
-    pub fn new(inst: dcp::Instance, buf: &'a mut [u8; 208]) -> Self {
+    pub fn new(builder: Builder, buf: &'a mut [u8; 208]) -> Self {
+        builder.setup();
+        let inst = builder.inst;
+
         Ch0::enable(&inst);
         Ch1::enable(&inst);
         Ch2::enable(&inst);
@@ -108,7 +117,7 @@ impl<'a> Scheduler<'a> {
     }
 
     /// Blocks until all channels have completed, disables the channels and returns the DCP instance.
-    pub fn release(self) -> dcp::Instance {
+    pub fn release(self) -> Builder {
         while self.busy() {}
 
         Ch0::disable(&self.inst);
@@ -116,7 +125,9 @@ impl<'a> Scheduler<'a> {
         Ch2::disable(&self.inst);
         Ch3::disable(&self.inst);
 
-        self.inst
+        Builder {
+            inst: self.inst
+        }
     }
 }
 
