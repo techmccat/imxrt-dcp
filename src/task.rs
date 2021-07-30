@@ -1,6 +1,14 @@
-use core::{convert::Infallible, marker::{PhantomData, PhantomPinned}, ops::{Deref, DerefMut}, pin::Pin};
+use core::{
+    marker::{PhantomData, PhantomPinned},
+    ops::{Deref, DerefMut},
+    pin::Pin,
+};
 
-use crate::{ex::Executor, packet::raw::{ControlPacket, BufSize, BlitSize, Control1}, ops::{*, config::*}};
+use crate::{
+    ex::{Executor, SlotsFull},
+    ops::{config::*, *},
+    packet::raw::{BlitSize, BufSize, Control1, ControlPacket},
+};
 
 // TODO: set buffers when constructing
 /// A [`Task`] whose buffers and tag have not been set yet.
@@ -9,7 +17,7 @@ use crate::{ex::Executor, packet::raw::{ControlPacket, BufSize, BlitSize, Contro
 /// [`Task`].
 pub struct BlankTask<'a, O> {
     pub(crate) raw: ControlPacket<'a>,
-    pub(crate) _op: PhantomData<O>
+    pub(crate) _op: PhantomData<O>,
 }
 
 impl<'a, O> BlankTask<'a, O> {
@@ -20,7 +28,7 @@ impl<'a, O> BlankTask<'a, O> {
     pub fn freeze(self) -> Task<'a> {
         Task {
             inner: self.raw,
-            _unpin: PhantomPinned
+            _unpin: PhantomPinned,
         }
     }
 }
@@ -43,10 +51,15 @@ impl<'a> BlankTask<'a, Blit> {
             self.raw.control0.constant_fill();
         }
 
-        self.raw.control1 = Control1::blit(dst.width);        
+        self.raw.control1 = Control1::blit(dst.width);
         self.raw.source = src.into();
         self.raw.dest = dst.pointer.as_mut_ptr();
-        self.raw.bufsize = BufSize { blit: BlitSize { width: dst.width, height: dst.height() } };
+        self.raw.bufsize = BufSize {
+            blit: BlitSize {
+                width: dst.width,
+                height: dst.height(),
+            },
+        };
     }
 }
 
@@ -57,10 +70,11 @@ impl<'a, C: CipherSelect> BlankTask<'a, Cipher<C>> {
 
         let len = match &mem {
             CryptMem::SourceDest(s, d) => {
-            // There might be a better way than panicking, like returning a result
-            assert_eq!(s.len(), d.len());
-            s.len() }
-            CryptMem::InPlace(sd) => sd.len()
+                // There might be a better way than panicking, like returning a result
+                assert_eq!(s.len(), d.len());
+                s.len()
+            }
+            CryptMem::InPlace(sd) => sd.len(),
         };
 
         let (source, dest) = mem.into();
@@ -100,11 +114,11 @@ impl<'a, C: CipherSelect, H: HashSelect> BlankTask<'a, CipherHash<C, H>> {
         assert!(payl.len() >= C::PAYLOAD_BYTES + H::PAYLOAD_BYTES);
         let len = match &mem {
             CryptMem::SourceDest(s, d) => {
-            // There might be a better way than panicking, like returning a result
+                // There might be a better way than panicking, like returning a result
                 assert_eq!(s.len(), d.len());
                 s.len()
             }
-            CryptMem::InPlace(sd) => sd.len()
+            CryptMem::InPlace(sd) => sd.len(),
         };
         let (source, dest) = mem.into();
 
@@ -120,12 +134,12 @@ impl<'a, C: CipherSelect, H: HashSelect> BlankTask<'a, CipherHash<C, H>> {
 /// Polling it without calling start first will always return [WouldBlock](nb::Error::WouldBlock)
 pub struct Task<'a> {
     inner: ControlPacket<'a>,
-    _unpin: PhantomPinned
+    _unpin: PhantomPinned,
 }
 
 impl Task<'_> {
     /// Tells the executor to start/schedule the task for execution
-    pub fn start<E: Executor>(self: Pin<&mut Self>, ex: &mut E) -> nb::Result<(), Infallible> {
+    pub fn start<E: Executor>(self: Pin<&mut Self>, ex: &mut E) -> Result<(), SlotsFull> {
         ex.exec_one(self)
     }
 
