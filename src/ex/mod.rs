@@ -8,15 +8,17 @@ pub struct SlotsFull;
 
 /// Executes `[Task]`s
 pub trait Executor {
-    /// Executes a single task, returning `[WouldBlock](nb::Error)`
-    fn exec_one(&self, task: Pin<&mut Task>) -> nb::Result<(), Infallible> {
+    /// Executes a single task.
+    ///
+    /// Returns [SlotsFull] if the queue (if there is any) is full.
+    fn exec_one(&self, task: Pin<&mut Task>) -> Result<(), SlotsFull> {
         // I feel like getting a pin and calling get_unchecked_mut is kind of pointless, but i'm
         // not sure I understand this pinning stuff yet.
         unsafe { self.inner_exec(task.get_unchecked_mut()) }
     }
 
     /// Same as `exec_one`, but executes a contiguous slice of `[Task]`s.
-    fn exec_slice(&self, tasks: Pin<&mut [Task]>) -> nb::Result<(), Infallible> {
+    fn exec_slice(&self, tasks: Pin<&mut [Task]>) -> Result<(), SlotsFull> {
         let slice_mut = unsafe { tasks.get_unchecked_mut() };
         if let Some((last, most)) = slice_mut.split_last_mut() {
             for task in most {
@@ -33,7 +35,7 @@ pub trait Executor {
     /// # Unsafe
     ///
     /// Implementor must guarantee that the `[Task]` is not moved after execution.
-    unsafe fn inner_exec(&self, task: &mut Task) -> nb::Result<(), Infallible>;
+    unsafe fn inner_exec(&self, task: &mut Task) -> Result<(), SlotsFull>;
 }
 
 /// A single channel `[Executor]` that does not need a context switch buffer.
@@ -65,9 +67,9 @@ impl<C: Channel> SingleChannel<C> {
 }
 
 impl<C: Channel> Executor for SingleChannel<C> {
-    unsafe fn inner_exec(&self, task: &mut Task) -> nb::Result<(), Infallible> {
+    unsafe fn inner_exec(&self, task: &mut Task) -> Result<(), SlotsFull> {
         if C::busy(&self.inst) {
-            Err(nb::Error::WouldBlock)
+            Err(SlotsFull)
         } else {
             task.control0.decr_semaphore();
             C::clear_and_cmdptr(&self.inst, task);
@@ -119,7 +121,7 @@ impl<'a> Scheduler<'a> {
 }
 
 impl<'a> Executor for Scheduler<'a> {
-    unsafe fn inner_exec(&self, task: &mut Task) -> nb::Result<(), Infallible> {
+    unsafe fn inner_exec(&self, task: &mut Task) -> Result<(), SlotsFull> {
         if !Ch3::busy(&self.inst) {
             Ch3::clear_and_cmdptr(&self.inst, task);
             Ch3::incr_semaphore(&self.inst, 1);
@@ -133,7 +135,7 @@ impl<'a> Executor for Scheduler<'a> {
             Ch0::clear_and_cmdptr(&self.inst, task);
             Ch0::incr_semaphore(&self.inst, 1);
         } else {
-            return Err(nb::Error::WouldBlock);
+            return Err(SlotsFull);
         }
         Ok(())
     }
