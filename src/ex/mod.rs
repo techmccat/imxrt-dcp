@@ -1,30 +1,30 @@
-use core::{marker::PhantomData, pin::Pin};
+use core::marker::PhantomData;
 use imxrt_ral::{dcp, write_reg};
 
-use crate::{channels::*, dcp::Builder, task::Task};
+use crate::{channels::*, dcp::Builder, packet::raw::ControlPacket};
 
 /// Error returned when the `[Executor]` does not have space left to enqueue the task
-pub struct SlotsFull;
+#[derive(Debug)]
+pub enum ExError {
+    SlotsFull,
+}
 
 /// Executes `[Task]`s
-pub trait Executor {
+pub trait Executor: Sized {
     /// Executes a single task.
     ///
     /// Returns [SlotsFull] if the queue (if there is any) is full.
-    fn exec_one(&self, task: Pin<&mut Task>) -> Result<(), SlotsFull> {
-        // I feel like getting a pin and calling get_unchecked_mut is kind of pointless, but i'm
-        // not sure I understand this pinning stuff yet.
-        unsafe { self.inner_exec(task.get_unchecked_mut()) }
+    fn exec_one(&self, task: &mut ControlPacket) -> Result<(), ExError> {
+        unsafe { self.inner_exec(task) }
     }
 
     /// Same as `exec_one`, but executes a contiguous slice of `[Task]`s.
-    fn exec_slice(&self, tasks: Pin<&mut [Task]>) -> Result<(), SlotsFull> {
-        let slice_mut = unsafe { tasks.get_unchecked_mut() };
-        if let Some((last, most)) = slice_mut.split_last_mut() {
+    fn exec_slice(&self, tasks: &mut [ControlPacket]) -> Result<(), ExError> {
+        if let Some((_, most)) = tasks.split_last_mut() {
             for task in most {
                 task.control0.chain_continuous()
             }
-            unsafe { self.inner_exec(last) }
+            unsafe { self.inner_exec(&mut tasks[0]) }
         } else {
             Ok(())
         }
@@ -35,7 +35,7 @@ pub trait Executor {
     /// # Unsafe
     ///
     /// Implementor must guarantee that the `[Task]` is not moved after execution.
-    unsafe fn inner_exec(&self, task: &mut Task) -> Result<(), SlotsFull>;
+    unsafe fn inner_exec(&self, task: &mut ControlPacket) -> Result<(), ExError>;
 }
 
 /// A single channel `[Executor]` that does not need a context switch buffer.
@@ -73,9 +73,9 @@ impl<C: Channel> SingleChannel<C> {
 }
 
 impl<C: Channel> Executor for SingleChannel<C> {
-    unsafe fn inner_exec(&self, task: &mut Task) -> Result<(), SlotsFull> {
+    unsafe fn inner_exec(&self, task: &mut ControlPacket) -> Result<(), ExError> {
         if C::busy(&self.inst) {
-            Err(SlotsFull)
+            Err(ExError::SlotsFull)
         } else {
             task.control0.decr_semaphore();
             C::clear_and_cmdptr(&self.inst, task);
@@ -132,7 +132,7 @@ impl<'a> Scheduler<'a> {
 }
 
 impl<'a> Executor for Scheduler<'a> {
-    unsafe fn inner_exec(&self, task: &mut Task) -> Result<(), SlotsFull> {
+    unsafe fn inner_exec(&self, task: &mut ControlPacket) -> Result<(), ExError> {
         if !Ch3::busy(&self.inst) {
             Ch3::clear_and_cmdptr(&self.inst, task);
             Ch3::incr_semaphore(&self.inst, 1);
@@ -146,7 +146,7 @@ impl<'a> Executor for Scheduler<'a> {
             Ch0::clear_and_cmdptr(&self.inst, task);
             Ch0::incr_semaphore(&self.inst, 1);
         } else {
-            return Err(SlotsFull);
+            return Err(ExError::SlotsFull);
         }
         Ok(())
     }

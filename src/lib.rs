@@ -1,6 +1,6 @@
 #![no_std]
 
-// use imxrt_hal as hal;
+use ex::ExError;
 use imxrt_ral as ral;
 
 pub mod channels;
@@ -16,6 +16,7 @@ pub mod task;
 // useful please submit a PR
 #[derive(Debug)]
 pub enum Error {
+    Executor(ExError),
     HashMismatch(u8),
     SetupError(u8),
     PacketError(u8),

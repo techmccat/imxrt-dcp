@@ -37,10 +37,12 @@ pub trait Channel {
     }
 }
 
-pub struct Ch0;
-pub struct Ch1;
-pub struct Ch2;
-pub struct Ch3;
+pub struct Ch<const N: u8>;
+
+pub type Ch0 = Ch<0>;
+pub type Ch1 = Ch<1>;
+pub type Ch2 = Ch<2>;
+pub type Ch3 = Ch<3>;
 
 macro_rules! write_cmdptr {
     ( $reg:ident ) => {
@@ -75,7 +77,7 @@ macro_rules! busy {
     };
 }
 
-impl Channel for Ch0 {
+impl Channel for Ch<0> {
     const CHANNEL_BIT: u32 = ch::CH0;
     write_cmdptr!(CH0CMDPTR);
     incr_semaphore!(CH0SEMA);
@@ -83,7 +85,7 @@ impl Channel for Ch0 {
     busy!(CH0SEMA);
 }
 
-impl Channel for Ch1 {
+impl Channel for Ch<1> {
     const CHANNEL_BIT: u32 = ch::CH1;
     write_cmdptr!(CH1CMDPTR);
     incr_semaphore!(CH1SEMA);
@@ -91,7 +93,7 @@ impl Channel for Ch1 {
     busy!(CH1SEMA);
 }
 
-impl Channel for Ch2 {
+impl Channel for Ch<2> {
     write_cmdptr!(CH2CMDPTR);
     const CHANNEL_BIT: u32 = ch::CH2;
     incr_semaphore!(CH2SEMA);
@@ -99,7 +101,7 @@ impl Channel for Ch2 {
     busy!(CH2SEMA);
 }
 
-impl Channel for Ch3 {
+impl Channel for Ch<3> {
     const CHANNEL_BIT: u32 = ch::CH3;
     write_cmdptr!(CH3CMDPTR);
     incr_semaphore!(CH3SEMA);
