@@ -36,3 +36,4 @@
 - [x] Reusable builders
 - [x] Set buffer addresses in the operation and not the builder (yaay, more type-specific impls)
 - [ ] Require setting buffer positions before freezing task
+- [ ] `alloc` feature for packet chains and dynamic queues
