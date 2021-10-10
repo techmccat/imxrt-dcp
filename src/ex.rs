@@ -1,11 +1,17 @@
+//! Execute DCP work packets.
+//!
+//! DCP packets need to be passed to the hardware to be ran.
+//! Executors handle that.
+
 use core::marker::PhantomData;
 use imxrt_ral::{dcp, write_reg};
 
-use crate::{channels::*, dcp::Builder, packet::raw::ControlPacket};
+use crate::{channels::*, dcp::DCP, packet::raw::ControlPacket};
 
-/// Error returned when the `[Executor]` does not have space left to enqueue the task
+/// Errors encountered while queueing a task for execution.
 #[derive(Debug)]
 pub enum ExError {
+    /// There is no
     SlotsFull,
 }
 
@@ -40,16 +46,13 @@ pub trait Executor: Sized {
 
 /// A single channel `[Executor]` that does not need a context switch buffer.
 pub struct SingleChannel<C: Channel> {
-    inst: dcp::Instance,
+    inst: DCP,
     _chan: PhantomData<C>,
 }
 
 impl<C: Channel> SingleChannel<C> {
     /// Builds `Self` from a `[Builder]`
-    pub fn new(builder: Builder) -> Self {
-        builder.setup();
-        let inst = builder.inst;
-
+    pub fn new(inst: DCP) -> Self {
         C::clear_status(&inst);
         C::enable(&inst);
 
@@ -60,15 +63,13 @@ impl<C: Channel> SingleChannel<C> {
     }
 
     /// Blocks until tasks are complete and returns a `[Builder]`.
-    pub fn release(self) -> Builder {
+    pub fn release(self) -> DCP {
         // block until the channel is free
         while C::busy(&self.inst) {}
 
         C::disable(&self.inst);
 
-        Builder {
-            inst: self.inst
-        }
+        self.inst
     }
 }
 
@@ -88,15 +89,16 @@ impl<C: Channel> Executor for SingleChannel<C> {
 
 /// A scheduler that manages multiple channels.
 pub struct Scheduler<'a> {
-    inst: dcp::Instance,
+    inst: DCP,
     _ctx: &'a mut [u8; 208],
 }
 
 impl<'a> Scheduler<'a> {
-    pub fn new(builder: Builder, buf: &'a mut [u8; 208]) -> Self {
-        builder.setup();
-        let inst = builder.inst;
-
+    /// Takes a memory region for the context switching buffer and returns a scheduler.
+    ///
+    /// If you don't want to worry about lifetimes i recommend allocating a static buffer and
+    /// being done with it.
+    pub fn new(inst: DCP, buf: &'a mut [u8; 208]) -> Self {
         Ch0::enable(&inst);
         Ch1::enable(&inst);
         Ch2::enable(&inst);
@@ -117,7 +119,7 @@ impl<'a> Scheduler<'a> {
     }
 
     /// Blocks until all channels have completed, disables the channels and returns the DCP instance.
-    pub fn release(self) -> Builder {
+    pub fn release(self) -> DCP {
         while self.busy() {}
 
         Ch0::disable(&self.inst);
@@ -125,9 +127,7 @@ impl<'a> Scheduler<'a> {
         Ch2::disable(&self.inst);
         Ch3::disable(&self.inst);
 
-        Builder {
-            inst: self.inst
-        }
+        self.inst
     }
 }
 

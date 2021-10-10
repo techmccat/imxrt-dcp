@@ -25,9 +25,12 @@
 - [x] Multi-channel scheduler
 - [ ] High-priority and reserved channels
 - [ ] Manage AES keys (OTP, write-only memory)
+- [ ] Asynchronous API
+    - [ ] Task future
+    - [ ] DCP interrupts call wakers (easy reactor)
 
 ## Library
-- [x] Prelude with essential structs and traits
+- [ ] Prelude with essential structs and traits
 - [x] Select SoC through features
 - [ ] Find a way to run tests
 - [ ] Useful documentation (possibly serious, so not written by me)

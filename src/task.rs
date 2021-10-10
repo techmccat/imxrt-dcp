@@ -1,3 +1,5 @@
+//! DCP task API.
+
 use core::{
     marker::{PhantomData, PhantomPinned},
     ops::{Deref, DerefMut},

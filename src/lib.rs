@@ -1,6 +1,5 @@
 #![no_std]
 
-use ex::ExError;
 use imxrt_ral as ral;
 
 pub mod channels;
@@ -16,7 +15,7 @@ pub mod task;
 // useful please submit a PR
 #[derive(Debug)]
 pub enum Error {
-    Executor(ExError),
+    Executor(ex::ExError),
     HashMismatch(u8),
     SetupError(u8),
     PacketError(u8),
@@ -25,12 +24,16 @@ pub enum Error {
     Other(u8)
 }
 
-pub type Result = nb::Result<u8, Error>;
+pub type Tag = u8;
+
+pub type Result = nb::Result<Tag, Error>;
 
 pub mod prelude {
     pub use crate::{
         ex::Executor,
+        channels::*,
         ops::{self, config::*},
         packet::PacketBuilder,
+        dcp,
     };
 }

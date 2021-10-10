@@ -1,6 +1,15 @@
+//! Code for managing the DCP hardware.
+//!
+//! This module contains structs and functions to clock and unclock the peripheral and manage its
+//! state.
+use core::ops::Deref;
+
 use imxrt_ral as ral;
 use ral::{dcp, modify_reg, write_reg};
 
+/// Unclocked DCP instance.
+///
+/// This needs to be clocked before it can be used.
 pub struct Unclocked {
     inst: dcp::Instance,
 }
@@ -34,8 +43,14 @@ pub struct Builder {
     pub(crate) inst: dcp::Instance,
 }
 
+/// Set DCP configuration before enabling it. (TBD)
+///
+/// In this state the peripheral is clocked but not enabled.
 impl Builder {
-    pub(crate) fn setup(&self) {
+    /// Enable the DCP.
+    /// 
+    /// This function resets the DCP, enables it and sets some necessary register flags.
+    pub fn build(self) -> DCP {
         // Reset the DCP to the default state
         // Set the SFTRST bit in the control register high
         write_reg!(dcp, self.inst, CTRL_SET, ral::dcp::CTRL::SFTRST::mask);
@@ -50,11 +65,18 @@ impl Builder {
         // Clear DCP status
         // Sets the first 4 bits from the STAT register to 0, clearing pending interrupts
         write_reg!(dcp, self.inst, STAT_CLR, ral::dcp::STAT::IRQ::mask);
-    }
 
+        DCP(self.inst)
+    }
+}
+
+/// Clocked and active DCP peripheral.
+pub struct DCP(pub(crate) dcp::Instance);
+
+impl DCP {
     /// Resets the DCP and disables clock.
     pub fn unclock(self, ccm: &ral::ccm::Instance) -> Unclocked {
-        let inst = self.inst;
+        let inst = self.0;
         // Clear interrupts
         write_reg!(dcp, inst, STAT_CLR, ral::dcp::STAT::IRQ::mask);
         // Put the DCP in its reset state
@@ -63,5 +85,13 @@ impl Builder {
         modify_reg!(ral::ccm, ccm, CCGR0, |r| r ^ ral::ccm::CCGR0::CG5::mask);
 
         Unclocked { inst }
+    }
+}
+
+impl Deref for DCP {
+    type Target = dcp::Instance;
+
+    fn deref(&self) -> &Self::Target {
+        &self.0
     }
 }

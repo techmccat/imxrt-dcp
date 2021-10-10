@@ -20,8 +20,6 @@ imxrt1062 = ["imxrt-ral/imxrt1062"]
 imxrt1064 = ["imxrt-ral/imxrt1064"]
 
 [dependencies]
-cortex-m = "0.7"
-cortex-m-rt = "0.6"
 bitvec = { version = "0.20", default-features = false }
 nb = "1.0"
 imxrt-ral = "0.4"

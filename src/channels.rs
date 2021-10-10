@@ -1,3 +1,10 @@
+//! Manage the different DCP execution channels.
+//!
+//! Tasks in different channels are not executed concurrently, it acts more like a scheduler with a
+//! very limited amount of tasks.
+//! Channels can have high or normal priority, to use more than one channel one must provide the
+//! DCP with a context switch buffer.
+
 use super::ral::{
     self,
     dcp::{RegisterBlock, CHANNELCTRL::ENABLE_CHANNEL::RW as ch},
@@ -5,7 +12,8 @@ use super::ral::{
 };
 use crate::packet::raw::ControlPacket;
 
-/// Trait implemented for DCP concurrent channels.
+/// Marker trait for DCP channels.
+// TODO: How do I seal traits again? This doesn't need to be implemented in other places.
 pub trait Channel {
     const CHANNEL_BIT: u32;
 
