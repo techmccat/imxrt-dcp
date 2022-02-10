@@ -15,11 +15,11 @@ pub enum ExError {
     SlotsFull,
 }
 
-/// Executes `[Task]`s
+/// Executes [`Task`](crate::task::Task)s
 pub trait Executor: Sized {
     /// Executes a single task.
     ///
-    /// Returns [SlotsFull] if the queue (if there is any) is full.
+    /// Returns [`SlotsFull`](ExError::SlotsFull) if the queue (if there is any) is full.
     fn exec_one(&self, task: &mut ControlPacket) -> Result<(), ExError> {
         unsafe { self.inner_exec(task) }
     }
@@ -44,7 +44,7 @@ pub trait Executor: Sized {
     unsafe fn inner_exec(&self, task: &mut ControlPacket) -> Result<(), ExError>;
 }
 
-/// A single channel `[Executor]` that does not need a context switch buffer.
+/// A single channel [`Executor`] that does not need a context switch buffer.
 pub struct SingleChannel<C: Channel> {
     inst: DCP,
     _chan: PhantomData<C>,

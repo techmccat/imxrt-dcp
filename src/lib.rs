@@ -1,6 +1,7 @@
 #![no_std]
 
 use imxrt_ral as ral;
+pub use nb::block;
 
 pub mod channels;
 pub mod dcp;

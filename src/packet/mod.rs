@@ -15,7 +15,7 @@ pub struct PacketBuilder<'a, T> {
 }
 
 impl PacketBuilder<'_, Memcopy> {
-    pub fn new() -> Self {
+    pub fn memcopy() -> Self {
         let raw = ControlPacket {
             control0: Control0::memcopy(),
             control1: Control1::default(),
@@ -30,7 +30,7 @@ impl PacketBuilder<'_, Memcopy> {
 }
 
 impl PacketBuilder<'_, Blit> {
-    pub fn new() -> Self {
+    pub fn blit() -> Self {
         let raw = ControlPacket {
             control0: Control0::blit(),
             control1: Control1::default(),
@@ -45,7 +45,7 @@ impl PacketBuilder<'_, Blit> {
 }
 
 impl<C: CipherSelect> PacketBuilder<'_, Cipher<C>> {
-    pub fn new() -> Self {
+    pub fn cipher() -> Self {
         let raw = ControlPacket {
             control0: Control0::cipher(),
             control1: C::ctl1(),
@@ -60,7 +60,7 @@ impl<C: CipherSelect> PacketBuilder<'_, Cipher<C>> {
 }
 
 impl<H: HashSelect> PacketBuilder<'_, Hash<H>> {
-    pub fn new() -> Self {
+    pub fn hash() -> Self {
         let raw = ControlPacket {
             control0: Control0::hash(),
             control1: H::ctl1(),
@@ -75,7 +75,7 @@ impl<H: HashSelect> PacketBuilder<'_, Hash<H>> {
 }
 
 impl<H: HashSelect> PacketBuilder<'_, MemcopyHash<H>> {
-    pub fn new() -> Self {
+    pub fn memcopy_hash() -> Self {
         let raw = ControlPacket {
             control0: Control0::memcopy_hash(),
             control1: H::ctl1(),
@@ -90,7 +90,7 @@ impl<H: HashSelect> PacketBuilder<'_, MemcopyHash<H>> {
 }
 
 impl<C: CipherSelect, H: HashSelect> PacketBuilder<'_, CipherHash<C, H>> {
-    pub fn new() -> Self {
+    pub fn cipher_hash() -> Self {
         let mut control1 = Control1::default();
         control1.cipher_select(C::CIPHER_SELECT);
         control1.cipher_mode(C::CIPHER_MODE);
