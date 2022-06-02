@@ -1,0 +1,27 @@
+[package]
+name = "teensy40-examples"
+version = "0.1.0"
+authors = ["techmccat <alessioa02004@gmail.com>"]
+edition = "2021"
+
+[dependencies]
+cortex-m = "0.7"
+cortex-m-rt = "0.7"
+embedded-hal = "0.2.3"
+# Remove me if you don't want logging
+log = "0.4.11"
+teensy4-panic = "0.2.0"
+imxrt-dcp = { path = ".." }
+
+[dependencies.teensy4-bsp]
+version = "0.3"
+features = ["rt"]
+
+# Don't optimize build dependencies, like proc macros.
+# Helps with build times.
+[profile.release.build-override]
+opt-level = 0
+
+[[bin]]
+name = "copy"
+path = "src/copy.rs"

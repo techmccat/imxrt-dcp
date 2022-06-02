@@ -8,7 +8,6 @@ pub mod dcp;
 pub mod ex;
 pub mod ops;
 pub mod packet;
-pub mod task;
 
 /// Derived from the DCP status field when an operation fails.
 /// Holds the error kind and an 8 bit error code.
@@ -33,8 +32,8 @@ pub mod prelude {
     pub use crate::{
         ex::Executor,
         channels::*,
-        ops::{self, config::*},
-        packet::PacketBuilder,
+        ops,
+        packet::builder::PacketBuilder,
         dcp,
     };
 }

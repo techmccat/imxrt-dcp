@@ -1,164 +1,203 @@
-pub mod raw;
-
+use crate::Error;
 use core::marker::PhantomData;
 
-use crate::task::BlankTask;
+pub mod builder;
 
-use super::ops::{*, config::*};
-use raw::*;
+/// The struct that is passed to the DCP.
+#[derive(Debug)]
+#[repr(C)]
+pub struct ControlPacket<'a> {
+    next: *mut ControlPacket<'a>,
+    pub(crate) control0: Control0,
+    control1: Control1,
+    source: Source<'a>,
+    dest: *mut u8,
+    bufsize: BufSize,
+    payload: *mut u8,
+    pub(crate) status: Status,
+    _lifetime: PhantomData<&'a ()>,
+}
 
-/// Constructs a control packet for the given operation.
+/// The Control0 field of the control packet.   
+/// It controls the main functions of the DCP and has a tag to identify packets.
+#[repr(C)]
+#[derive(Default, Clone, Copy, Debug)]
+pub(crate) struct Control0 {
+    flags: [u8; 3],
+    tag: u8,
+}
+
+/// Flags that can be set in the Control0 field
+#[allow(dead_code)]
+#[derive(Clone, Copy, Debug)]
+#[repr(u32)]
+pub(crate) enum Control0Flag {
+    InterruptEnable = 1,
+    DecrSemaphore = 1 << 1,
+    Chain = 1 << 2,
+    ChainContinuous = 1 << 3,
+    EnableMemcopy = 1 << 4,
+    EnableCipher = 1 << 5,
+    EnableHash = 1 << 6,
+    EnableBlit = 1 << 7,
+    CipherEncrypt = 1 << 8,
+    CipherInit = 1 << 9,
+    OtpKey = 1 << 10,
+    PayloadKey = 1 << 11,
+    HashInit = 1 << 12,
+    HashTerm = 1 << 13,
+    HashCheck = 1 << 14,
+    HashOutput = 1 << 15,
+    ConstantFill = 1 << 16,
+    TestSemaIRQ = 1 << 17,
+    KeyByteSwap = 1 << 18,
+    KeyWordSwap = 1 << 19,
+    InputByteSwap = 1 << 20,
+    InputWordSwap = 1 << 21,
+    OutputByteSwap = 1 << 22,
+    OutputWordSwap = 1 << 23,
+}
+
+impl Control0 {
+    pub(crate) fn flag(mut self, flag: Control0Flag) -> Self {
+        let ptr = &mut self as *mut Self as *mut u32;
+        unsafe { *ptr |= flag as u32 };
+        self
+    }
+}
+
+/// The Control1 field contains values used in encrypt, hash or blit operations.
+#[derive(Clone, Copy)]
+#[repr(C)]
+union Control1 {
+    /// Crypto config
+    pub crypto: Ctl1Crypto,
+    /// Total framebuffer lenght
+    pub blit_size: u16,
+}
+
+impl core::fmt::Debug for Control1 {
+    fn fmt(&self, f: &mut core::fmt::Formatter<'_>) -> core::fmt::Result {
+        let blit = unsafe { self.blit_size };
+        let crypto = unsafe { self.crypto };
+        f.write_fmt(format_args!(
+            "Control1 {blit} bytes or {crypto:#?}"
+        ))
+    }
+}
+
+#[derive(Clone, Copy, Debug)]
+#[repr(C)]
+struct Ctl1Crypto {
+    cipher: Cipher,
+    key: KeySelect,
+    hash: Hash,
+    // doesn't seem to be used anywhere
+    _cipher_config: u8,
+}
+
+/// Supported symmetric ciphers
+#[derive(Clone, Copy, Debug)]
+#[repr(u8)]
+pub enum Cipher {
+    Aes128Ecb = 0,
+    Aes128Cbc = 1 << 3,
+}
+
+/// Select key to use from a keyslot
+#[derive(Clone, Copy, Debug)]
+#[repr(u8)]
+pub enum KeySelect {
+    Key0 = 0x0,
+    Key1 = 0x1,
+    Key2 = 0x2,
+    Key3 = 0x3,
+    UniqueKey = 0xFE,
+    OtpKey = 0xFF,
+}
+
+/// Supported hashing algorithms
+#[derive(Clone, Copy, Debug)]
+#[repr(u8)]
+pub enum Hash {
+    Sha1 = 0,
+    Crc32 = 1,
+    Sha256 = 2,
+}
+
+/// Data source for the DCP.
 ///
-/// The options will be different based on the operation.
-pub struct PacketBuilder<'a, T> {
-    pub raw: ControlPacket<'a>, phantom: PhantomData<T>,
+/// It can either be a 32 bit value for constant fill or a pointer.
+#[repr(C)]
+#[derive(Clone, Copy)]
+pub union Source<'a> {
+    pub constant: u32,
+    pub pointer: *const u8,
+    _lifetime: PhantomData<&'a ()>
 }
 
-impl PacketBuilder<'_, Memcopy> {
-    pub fn memcopy() -> Self {
-        let raw = ControlPacket {
-            control0: Control0::memcopy(),
-            control1: Control1::default(),
-            ..Default::default()
-        };
-
-        Self {
-            raw,
-            phantom: PhantomData,
-        }
+impl core::fmt::Debug for Source<'_> {
+    fn fmt(&self, f: &mut core::fmt::Formatter<'_>) -> core::fmt::Result {
+        f.write_fmt(format_args!(
+            "Source {:#x}", unsafe { self.constant }
+        ))
     }
 }
 
-impl PacketBuilder<'_, Blit> {
-    pub fn blit() -> Self {
-        let raw = ControlPacket {
-            control0: Control0::blit(),
-            control1: Control1::default(),
-            ..Default::default()
-        };
+/// Holds the buffer size or the blit framebuffer's height and width.
+#[derive(Clone, Copy)]
+#[repr(C)]
+union BufSize {
+    pub buf: u32,
+    pub blit: BlitSize,
+}
 
-        Self {
-            raw,
-            phantom: PhantomData,
-        }
+impl core::fmt::Debug for BufSize {
+    fn fmt(&self, f: &mut core::fmt::Formatter<'_>) -> core::fmt::Result {
+        f.write_fmt(format_args!(
+            "BufSize ({})", unsafe { self.buf }
+        ))
     }
 }
 
-impl<C: CipherSelect> PacketBuilder<'_, Cipher<C>> {
-    pub fn cipher() -> Self {
-        let raw = ControlPacket {
-            control0: Control0::cipher(),
-            control1: C::ctl1(),
-            ..Default::default()
-        };
-
-        Self {
-            raw,
-            phantom: PhantomData,
-        }
-    }
+/// Holds the blit framebuffer size data.
+#[derive(Clone, Copy)]
+#[repr(C)]
+pub struct BlitSize {
+    /// Width in bytes
+    pub width: u16,
+    /// Height in lines
+    pub height: u16,
 }
 
-impl<H: HashSelect> PacketBuilder<'_, Hash<H>> {
-    pub fn hash() -> Self {
-        let raw = ControlPacket {
-            control0: Control0::hash(),
-            control1: H::ctl1(),
-            ..Default::default()
-        };
-
-        Self {
-            raw,
-            phantom: PhantomData,
-        }
-    }
+/// Is filled by the DCP at the end of the operation, holds eventual errors and the packet tag.
+#[derive(Clone, Copy, Debug)]
+#[repr(C)]
+pub struct Status {
+    /// Completion or eventual errors.
+    pub bits: u8,
+    _pad: u8,
+    pub error_code: u8,
+    /// Tag initially put in Control0 for identification.
+    pub tag: u8,
 }
 
-impl<H: HashSelect> PacketBuilder<'_, MemcopyHash<H>> {
-    pub fn memcopy_hash() -> Self {
-        let raw = ControlPacket {
-            control0: Control0::memcopy_hash(),
-            control1: H::ctl1(),
-            ..Default::default()
-        };
-
-        Self {
-            raw,
-            phantom: PhantomData,
-        }
-    }
-}
-
-impl<C: CipherSelect, H: HashSelect> PacketBuilder<'_, CipherHash<C, H>> {
-    pub fn cipher_hash() -> Self {
-        let mut control1 = Control1::default();
-        control1.cipher_select(C::CIPHER_SELECT);
-        control1.cipher_mode(C::CIPHER_MODE);
-        control1.hash_select(H::HASH_SELECT);
-
-        let raw = ControlPacket {
-            next: None,
-            control0: Control0::cipher_hash(),
-            control1,
-            ..Default::default()
-        };
-
-        Self {
-            raw,
-            phantom: PhantomData,
-        }
-    }
-}
-
-macro_rules! ctl0_wrapper {
-	( $fn:ident ) => {
-        pub fn $fn(&mut self) {
-            self.raw.control0.$fn()
-        }
-	};
-
-	( $fn:ident => $( $raw:ident ),+ ) => {
-        pub fn $fn(&mut self) {
-            $(
-            self.raw.control0.$raw();
-            )+
-        }
-	};
-}
-
-impl<T: HasCrypt> PacketBuilder<'_, T> {
-    pub fn set_key(&mut self, key: CryptKey) {
-        match key {
-            CryptKey::Payload => self.raw.control0.payload_key(),
-            CryptKey::KeyRam(_) => (),
-            _ => self.raw.control0.otp_key()
-        }
-
-        self.raw.control1.key_select(key.into())
-    }
-
-    ctl0_wrapper!(encrypt => cipher_encrypt);
-    ctl0_wrapper!(cipher_init);
-}
-
-impl<T: HasHash> PacketBuilder<'_, T> {
-    ctl0_wrapper!(hash_init);
-    ctl0_wrapper!(hash_term);
-    ctl0_wrapper!(check_hash => hash_check);
-    ctl0_wrapper!(hash_output);
-}
-
-impl<'a, T> PacketBuilder <'a, T> {
-    ctl0_wrapper!(input_big_endian => input_wordswap, input_byteswap);
-    ctl0_wrapper!(output_big_endian => output_wordswap, output_byteswap);
-    ctl0_wrapper!(key_big_endian => key_wordswap, key_byteswap);
-    ctl0_wrapper!(chain_continuous);
-    ctl0_wrapper!(decr_semaphore);
-
-    pub fn new_task(&self) -> BlankTask<'a, T> {
-        BlankTask {
-            raw: self.raw.clone(),
-            _op: self.phantom
+impl Status {
+    /// Non-blocking API to poll for completion.  
+    /// Returns WouldBlock when the operation is not complete
+    pub fn poll(&self) -> crate::Result {
+        if self.bits & 1 == 1 {
+            match self.bits {
+                1 => Ok(self.tag),
+                2 => Err(nb::Error::Other(Error::HashMismatch(self.error_code))),
+                4 => Err(nb::Error::Other(Error::SetupError(self.error_code))),
+                8 => Err(nb::Error::Other(Error::PacketError(self.error_code))),
+                16 => Err(nb::Error::Other(Error::SourceError(self.error_code))),
+                32 => Err(nb::Error::Other(Error::DestError(self.error_code))),
+                _ => Err(nb::Error::Other(Error::Other(self.error_code))),
+            }
+        } else {
+            Err(nb::Error::WouldBlock)
         }
     }
 }

@@ -51,27 +51,29 @@ impl Builder {
     /// 
     /// This function resets the DCP, enables it and sets some necessary register flags.
     pub fn build(self) -> DCP {
+        // Set CLKGATE to zero
+        write_reg!(dcp, self.inst, CTRL_CLR, ral::dcp::CTRL::CLKGATE::mask);
         // Reset the DCP to the default state
         // Set the SFTRST bit in the control register high
         write_reg!(dcp, self.inst, CTRL_SET, ral::dcp::CTRL::SFTRST::mask);
         // Then set it low to enable operation
         write_reg!(dcp, self.inst, CTRL_CLR, ral::dcp::CTRL::SFTRST::mask);
+        // Clear DCP status
+        // Sets the first 4 bits from the STAT register to 0, clearing pending interrupts
+        write_reg!(dcp, self.inst, STAT_CLR, ral::dcp::STAT::IRQ::mask);
+
         // Enable residual writes for faster unaligned operations
         let ctrl_reg = ral::dcp::CTRL::GATHER_RESIDUAL_WRITES::mask
         // Context caching
         | ral::dcp::CTRL::ENABLE_CONTEXT_CACHING::mask;
         write_reg!(dcp, self.inst, CTRL_SET, ctrl_reg);
 
-        // Clear DCP status
-        // Sets the first 4 bits from the STAT register to 0, clearing pending interrupts
-        write_reg!(dcp, self.inst, STAT_CLR, ral::dcp::STAT::IRQ::mask);
-
         DCP(self.inst)
     }
 }
 
 /// Clocked and active DCP peripheral.
-pub struct DCP(pub(crate) dcp::Instance);
+pub struct DCP(pub/*(crate)*/ dcp::Instance);
 
 impl DCP {
     /// Resets the DCP and disables clock.

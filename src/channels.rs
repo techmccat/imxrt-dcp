@@ -10,11 +10,16 @@ use super::ral::{
     dcp::{RegisterBlock, CHANNELCTRL::ENABLE_CHANNEL::RW as ch},
     read_reg, write_reg,
 };
-use crate::packet::raw::ControlPacket;
+use crate::packet::ControlPacket;
 
 /// Marker trait for DCP channels.
-// TODO: How do I seal traits again? This doesn't need to be implemented in other places.
-pub trait Channel {
+
+mod private {
+    pub trait Sealed {}
+    impl<const N: u8> Sealed for super::Ch<N> {}
+}
+
+pub trait Channel: private::Sealed {
     const CHANNEL_BIT: u32;
 
     /// Schedules the execution of a packet in the channel.
@@ -30,6 +35,10 @@ pub trait Channel {
     fn enable(inst: &RegisterBlock) {
         write_reg!(ral::dcp, inst, CHANNELCTRL_SET, Self::CHANNEL_BIT);
         Self::clear_status(inst);
+    }
+
+    fn enabled(inst: &RegisterBlock) -> bool {
+        read_reg!(ral::dcp, inst, CHANNELCTRL) == Self::CHANNEL_BIT
     }
 
     /// Disables the channel and clears its status.
@@ -56,7 +65,9 @@ macro_rules! write_cmdptr {
     ( $reg:ident ) => {
         fn write_cmdptr(inst: &RegisterBlock, ptr: &ControlPacket) {
             let raw_ptr = ptr as *const ControlPacket as u32;
-            write_reg!(ral::dcp, inst, $reg, raw_ptr)
+            log::debug!(concat!("Writing {:#x} to ", stringify!($reg)), raw_ptr);
+            write_reg!(ral::dcp, inst, $reg, raw_ptr);
+            log::debug!(concat!(stringify!($reg), " now set to {:#x}"), read_reg!(ral::dcp, inst, $reg));
         }
     };
 }
@@ -72,7 +83,7 @@ macro_rules! incr_semaphore {
 macro_rules! clear_status {
     ( $reg:ident ) => {
         fn clear_status(inst: &RegisterBlock) {
-            write_reg!(ral::dcp, inst, $reg, u32::MAX)
+            write_reg!(ral::dcp, inst, $reg, 0xFF)
         }
     };
 }

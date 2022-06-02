@@ -6,34 +6,39 @@
 use core::marker::PhantomData;
 use imxrt_ral::{dcp, write_reg};
 
-use crate::{channels::*, dcp::DCP, packet::raw::ControlPacket};
+use crate::{
+    channels::*,
+    dcp::DCP,
+    packet::{Control0Flag, ControlPacket},
+};
 
 /// Errors encountered while queueing a task for execution.
 #[derive(Debug)]
 pub enum ExError {
-    /// There is no
+    /// All the channels are full
     SlotsFull,
 }
 
 /// Executes [`Task`](crate::task::Task)s
-pub trait Executor: Sized {
+pub trait Executor {
     /// Executes a single task.
     ///
     /// Returns [`SlotsFull`](ExError::SlotsFull) if the queue (if there is any) is full.
-    fn exec_one(&self, task: &mut ControlPacket) -> Result<(), ExError> {
-        unsafe { self.inner_exec(task) }
+    fn exec_one<'a>(&self, task: &'a mut ControlPacket<'a>) -> Result<Task<'a>, ExError> {
+        unsafe { self.inner_exec(task) }?;
+        Ok(Task { packet: task })
     }
 
     /// Same as `exec_one`, but executes a contiguous slice of `[Task]`s.
-    fn exec_slice(&self, tasks: &mut [ControlPacket]) -> Result<(), ExError> {
-        if let Some((_, most)) = tasks.split_last_mut() {
-            for task in most {
-                task.control0.chain_continuous()
-            }
-            unsafe { self.inner_exec(&mut tasks[0]) }
-        } else {
-            Ok(())
+    ///
+    /// Panics if slice is empty.
+    fn exec_slice<'a>(&self, tasks: &'a mut [ControlPacket<'a>]) -> Result<Task<'a>, ExError> {
+        let (_, most) = tasks.split_last_mut().unwrap();
+        for task in most {
+            task.control0 = task.control0.flag(Control0Flag::ChainContinuous)
         }
+        unsafe { self.inner_exec(&mut tasks[0]) }?;
+        Ok(Task { packet: tasks.last_mut().unwrap() })
     }
 
     /// Implementation-specific function called by the other methods.
@@ -46,20 +51,22 @@ pub trait Executor: Sized {
 
 /// A single channel [`Executor`] that does not need a context switch buffer.
 pub struct SingleChannel<C: Channel> {
-    inst: DCP,
+    pub inst: DCP,
     _chan: PhantomData<C>,
 }
 
 impl<C: Channel> SingleChannel<C> {
-    /// Builds `Self` from a `[Builder]`
-    pub fn new(inst: DCP) -> Self {
+    pub fn take(inst: DCP) -> Option<Self> {
+        if C::enabled(&inst) {
+            return None;
+        }
         C::clear_status(&inst);
         C::enable(&inst);
 
-        Self {
+        Some(Self {
             inst,
-            _chan: PhantomData
-        }
+            _chan: PhantomData,
+        })
     }
 
     /// Blocks until tasks are complete and returns a `[Builder]`.
@@ -78,7 +85,7 @@ impl<C: Channel> Executor for SingleChannel<C> {
         if C::busy(&self.inst) {
             Err(ExError::SlotsFull)
         } else {
-            task.control0.decr_semaphore();
+            task.control0.flag(Control0Flag::DecrSemaphore);
             C::clear_and_cmdptr(&self.inst, task);
             C::incr_semaphore(&self.inst, 1);
 
@@ -104,7 +111,12 @@ impl<'a> Scheduler<'a> {
         Ch2::enable(&inst);
         Ch3::enable(&inst);
 
-        write_reg!(dcp, &inst, CTRL_SET, dcp::CTRL::ENABLE_CONTEXT_SWITCHING::mask);
+        write_reg!(
+            dcp,
+            &inst,
+            CTRL_SET,
+            dcp::CTRL::ENABLE_CONTEXT_SWITCHING::mask
+        );
         write_reg!(dcp, &inst, CONTEXT, buf as *const u8 as u32);
 
         Self { inst, _ctx: buf }
@@ -149,5 +161,15 @@ impl<'a> Executor for Scheduler<'a> {
             return Err(ExError::SlotsFull);
         }
         Ok(())
+    }
+}
+
+pub struct Task<'a> {
+    packet: &'a mut ControlPacket<'a>,
+}
+
+impl Task<'_> {
+    pub fn poll(&self) -> crate::Result {
+        self.packet.status.poll()
     }
 }
