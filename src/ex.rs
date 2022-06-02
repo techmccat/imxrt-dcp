@@ -164,6 +164,10 @@ impl<'a> Executor for Scheduler<'a> {
     }
 }
 
+/// Task object to poll for completion
+///
+/// The [Drop] implementation on this waits for completion of the operation and then discards the
+/// result to prevent the DCP from holding a dangling pointers to the work packet and the buffers.
 pub struct Task<'a> {
     packet: &'a mut ControlPacket<'a>,
 }
@@ -171,5 +175,11 @@ pub struct Task<'a> {
 impl Task<'_> {
     pub fn poll(&self) -> crate::Result {
         self.packet.status.poll()
+    }
+}
+
+impl Drop for Task<'_> {
+    fn drop(&mut self) {
+        let _ = nb::block!(self.poll());
     }
 }
