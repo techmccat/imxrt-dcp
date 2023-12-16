@@ -25,3 +25,7 @@ opt-level = 0
 [[bin]]
 name = "copy"
 path = "src/copy.rs"
+
+[[bin]]
+name = "hash"
+path = "src/hash.rs"

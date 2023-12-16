@@ -7,7 +7,7 @@ use teensy4_panic as _;
 use cortex_m::{asm, delay::Delay, peripheral::syst::SystClkSource};
 use imxrt_dcp::{
     ex::SingleChannel,
-    ops::Memcopy,
+    ops::Hash,
     packet::{ControlPacket, Source},
     prelude::*,
 };
@@ -32,15 +32,28 @@ fn main() -> ! {
     for i in 0..64 {
         src_buf[i] = i as u8;
     }
-    let mut dest_buf = [0u8; 64];
+    // stores calculated CRC32 hash
+    let mut dest_buf = [0u8; 4];
+    // calculated with http://www.sunshine2k.de/coding/javascript/crc/crc_js.html
+    // Options:
+    // Input reflected:     false
+    // Result reflected:    false
+    // Polynomial:          0x4C11DB7
+    // Initial value:       0xFFFFFFFF
+    // Final XOR value:     0x000000000
+    // (Little endian)
+    let expected_crc = 0xBCBD08F5u32;
 
     {
-        let builder: PacketBuilder<Memcopy> = PacketBuilder::default()
+        let builder: PacketBuilder<Hash> = PacketBuilder::default()
+            .hash(Hash::Crc32)
+            .hash_init()
+            .hash_term()
             .tag(7)
             .source(Source {
                 pointer: &src_buf[0] as *const u8,
             })
-            .dest(&mut dest_buf)
+            .payload(&mut dest_buf)
             .decr_semaphore();
 
         let mut packet: ControlPacket = builder.into();
@@ -51,13 +64,15 @@ fn main() -> ! {
         log::warn!("Operation result: {res:?}");
     }
 
-    if src_buf == dest_buf {
-        log::info!("Buffers match, some mysterious entity has copied 64 bytes.")
+    log::info!("Calculatec CRC = {dest_buf:X?}");
+    log::info!("Expected CRC   = {:X?}", expected_crc.to_le_bytes());
+    if dest_buf == expected_crc.to_le_bytes() {
+        log::info!("Buffers match, CRC worked as expected.")
     } else {
-        log::error!("Buffers don't match.")
+        log::error!("Buffers don't match.");
     }
 
     loop {
-        asm::nop()
+        asm::wfi()
     }
 }
