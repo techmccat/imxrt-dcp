@@ -19,7 +19,7 @@ pub enum ExError {
     SlotsFull,
 }
 
-/// Executes [`Task`](crate::task::Task)s
+/// Executes [`Task`]s
 pub trait Executor {
     /// Executes a single task.
     ///
@@ -29,7 +29,7 @@ pub trait Executor {
         Ok(Task { packet: task })
     }
 
-    /// Same as `exec_one`, but executes a contiguous slice of `[Task]`s.
+    /// Same as `exec_one`, but executes a contiguous slice of `Task`s.
     ///
     /// Panics if slice is empty.
     fn exec_slice<'a>(&self, tasks: &'a mut [ControlPacket<'a>]) -> Result<Task<'a>, ExError> {
@@ -45,7 +45,7 @@ pub trait Executor {
     ///
     /// # Unsafe
     ///
-    /// Implementor must guarantee that the `[Task]` is not moved after execution.
+    /// Implementor must guarantee that the ControlPacket is not moved after execution.
     unsafe fn inner_exec(&self, task: &mut ControlPacket) -> Result<(), ExError>;
 }
 
