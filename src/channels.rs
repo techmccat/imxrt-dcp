@@ -67,7 +67,6 @@ macro_rules! write_cmdptr {
             let raw_ptr = ptr as *const ControlPacket as u32;
             log::debug!(concat!("Writing {:#x} to ", stringify!($reg)), raw_ptr);
             write_reg!(ral::dcp, inst, $reg, raw_ptr);
-            log::debug!(concat!(stringify!($reg), " now set to {:#x}"), read_reg!(ral::dcp, inst, $reg));
         }
     };
 }
